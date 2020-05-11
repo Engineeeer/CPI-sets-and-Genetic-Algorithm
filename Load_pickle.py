@@ -179,18 +179,18 @@ def EoM_simulate(x_0, r_series, sys):
     return x_series    
 
 if __name__ == "__main__":
-    with open(Path(__file__).absolute().parent / "pickle_yard" / "genes691500.pickle", "rb") as fp:
+    with open(Path(__file__).absolute().parent / "pickle_yard" / "genes100.pickle", "rb") as fp:
         genes = pickle.load(fp)
     with open(Path(__file__).absolute().parent / "pickle_yard" / "CPI_set.pickle", "rb") as ffp:
         CPI_set = pickle.load(ffp)
     evaluations = [evaluate_gene(g) for g in genes]
     elite_gene,elite_evaluation = sorted(zip(genes, evaluations), key = lambda item: item[1])[-1]
-    #plot_CPI(CPI_set,elite_gene)
+    plot_CPI(CPI_set,elite_gene)
     #plot_onlyCPI(CPI_set)
     X_0 = np.array([0,0])
     R_series = np.ones(1000) * 1.5
     X_series = EoM_simulate(X_0,R_series,sys)
-    #plt.plot(X_series[:,0],X_series[:,1],linewidth = "6",color = "orange")
+    plt.plot(X_series[:,0],X_series[:,1],linewidth = "6",color = "orange")
 
     plot_result(elite_gene)
     

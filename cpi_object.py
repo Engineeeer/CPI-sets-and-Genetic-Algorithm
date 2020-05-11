@@ -3,24 +3,21 @@ import numpy.linalg as nl
 import pulp
 import matplotlib.pyplot as plt
 import itertools
-from scipy import signal as sg
+import scipy.signal as sg
 import pickle
 from pathlib import Path
-#入力制限は左右対称じゃないとこれバグる
+
+#入力制限は左右(上下)対称を仮定
 Mz = np.array([[-1/5.0],[1/5.0]])
-K_p = 1.0 #2.0
-K_d = 0.5#1.5
-#A = np.array([[-0.3,1.0],[-1.0,1.5]])
+K_p = 1.0 
+K_d = 0.5
 A = np.array([[0,1],[-K_p,-0.5 - K_d]])
-#B = np.array([2.4,1.7])
 B = np.array([[0],[1.0]])
-#C = np.array([[-0.2,-0.5]])
 C = np.array([[-K_p,-K_d]])
 D = np.array([K_p])
 
 Ts = 0.05
-c2d = sg.cont2discrete((A,B,C,D),dt = Ts)
-
+c2d = sg.cont2discrete([A,B,C,D],dt = Ts)
 A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
 
 sys = np.array([A_d,B_d,C_d,D_d])
@@ -44,11 +41,9 @@ def make_right_raw(Mz, sys, idx, w_max, w_min):
     problem_0 = pulp.LpProblem("g_0", pulp.LpMaximize)
     problem = pulp.LpProblem("g_*", pulp.LpMaximize)
     w = pulp.LpVariable("w", w_min, w_max, "Continuous")
-    
     #メモリ確保
     g_stur = np.zeros(len(Mz))
-    
-    #D = 0 の時の処理
+    #D != 0 の時の処理
     if sys[3] != 0:
         for a in range(len(g_stur)):
                 problem_0 += (Mz @ sys[3])[a] * w
@@ -57,7 +52,8 @@ def make_right_raw(Mz, sys, idx, w_max, w_min):
 
     for i in range(idx):
         for j in range(len(g_stur)):
-            problem += (Mz @ sys[2] @ nl.matrix_power(sys[0],i) @ sys[1])[j] * w
+            problem += (Mz @ sys[2] @ nl.matrix_power(sys[0],i) 
+                    @ sys[1])[j] * w
             problem.solve()
             g_stur[j] += (Mz @ sys[2] @ nl.matrix_power(sys[0],i) @ sys[1])[j] * w.value()
     return 1-g_stur
@@ -74,7 +70,6 @@ class Object:
         for i in range(len(self.right)):
             if self.right[i] > 0:
                 cnt += 1
-            #print(cnt)
         if cnt != len(self.right):
             return True
 
@@ -97,16 +92,12 @@ class CPI:
         self.unnormal_list = []
         self.M_i_set = []
         self.CPI_set = []
-        """
-        self.cpi_setの中にM_0, M_1=[M_1/2 M_0]^T, ... , M_inf=[M_(inf-1)/2 M_0] が入る.
-        """
-
+        #self.CPI_setの中にM_0, M_1=[M_1/2 M_0]^T, ... , M_inf=[M_(inf-1)/2 M_0] が入る.
+        
     def set_M_i_set(self, idx):
         a = [self.unnormal_list[i].normalization() for i in range(idx)]
         self.M_i_set.append(np.vstack(a))
-    
-    #self.M_i_setの要素(即ちM_i)を受け取って非冗長なM_iを返す
-    #例外処理が必要となるだろう
+        #self.M_i_setの要素(即ちM_i)を受け取って非冗長なM_iを返す
 
     def ELIM(self,M_r,th = 1E-4):
         i_list = []
@@ -142,14 +133,11 @@ class CPI:
         w_min = -2.0
         w_max = 2.0
         idx = 0
-        self.unnormal_list.append(self.obj(make_left_matrix(Mz,sys,0),make_right_raw(Mz,sys,0,w_max,w_min)))
+        self.unnormal_list.append(self.obj(make_left_matrix(Mz,sys,idx),make_right_raw(Mz,sys,idx,w_max,w_min)))
         self.set_M_i_set(1)
         self.ELIM(self.M_i_set[0])
         for i in itertools.count(1):
             idx += 1
-        #while CPI.check_CPI_identity(self.CPI_set[i], self.CPI_set[i-1]):
-        #while (self.CPI_set[i] == self.CPI_set[i-1]).all(): <- が正しい
-        #while self.CPI_set[i].all() == self.CPI_set[i-1].all(): <-は誤り
             self.unnormal_list.append(self.obj(make_left_matrix(Mz,sys,i),make_right_raw(Mz,sys,i,w_max,w_min)))
             if self.unnormal_list[i].check == True:
                 print("check is False")
@@ -179,27 +167,15 @@ class CPI:
         A_list = list(itertools.combinations(M_i,2))
         for i in range(len(A_list)):
             a = np.vstack([A_list[i][0],A_list[i][1]])
-            #print("a",a)
+            #print("a",a) #printデバック用
             try:
                 Ans = nl.solve(a,b)
-                #print("Ans",Ans)
+                #print("Ans",Ans) #printデバック用
                 Intersection_list.append(Ans)
-            #交点がない場合はエラーがでる
             except:
-            #except LinAlgError:
                 pass
         return Intersection_list
 
-    #def plot_unnormal_list(self):
-    #    plt.figure()
-    #    plt.plot(0,0,"o")
-    #    for i in self.unnormal_list:
-    #        i.plot_to_figure()
-    #    plt.show()
-            
-    #それぞれをM_1とかでまとめる必要はあるのか・・・？
-    #例えばunnormal_listの両辺をnormal_listとしてまとめて,cpi_listに任意の塊を格納すれば良いのでは？
-    #np.vstack使えばndarrayの縦方向連結が出来る
 if __name__ == "__main__":
     cpi = CPI(Object)
     cpi.simulate()
@@ -210,14 +186,12 @@ if __name__ == "__main__":
 
     x_series = EoM_simulate(x_0,r_series,sys)
     plt.plot(x_series[:,0],x_series[:,1])
-    #レギュレータをチェック
     X_0 = np.array([-1.5,0])
     R_series = np.zeros(1000)
     X_series = EoM_simulate(X_0,R_series,sys)
     plt.plot(X_series[:,0],X_series[:,1])
-    #平衡点ずらしても行けそうな気がする
     plt.show()
     
     with open(Path(__file__).absolute().parent / "pickle_yard" / "CPI_set.pickle", "wb") as f:
         pickle.dump(cpi.CPI_set[-1],f)
-    
+    #計算された最大CPI集合を"CPI_set.pickle"として保存，Load_pickle.pyで読み取りが可能
