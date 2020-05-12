@@ -7,6 +7,8 @@ import scipy.signal as sg
 import pickle
 from pathlib import Path
 
+#システムパラメータ部開始
+
 #入力制限は左右(上下)対称を仮定
 Mz = np.array([[-1/5.0],[1/5.0]])
 K_p = 1.0 
@@ -22,6 +24,7 @@ A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
 
 sys = np.array([A_d,B_d,C_d,D_d])
 
+#システムパラメータ部終了
 def EoM_simulate(x_0, r_series, sys):
     #離散状態方程式の更新式
     A = sys[0]
@@ -130,6 +133,7 @@ class CPI:
         return cpi1.shape[0] == cpi2.shape[0]
 
     def simulate(self):
+        #目標値幅は左右(上下)対象を仮定する
         w_min = -2.0
         w_max = 2.0
         idx = 0

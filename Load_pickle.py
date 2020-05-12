@@ -5,17 +5,14 @@ import matplotlib.pyplot as plt
 import pickle
 from pathlib import Path
 from scipy import signal as sg
-plt.rcParams["font.size"] = 36
+#plt.rcParams["font.size"] = 36
 
-#入力制限は左右対称じゃないとこれバグる
+#CPI用パラメータ部開始
 Mz = np.array([[-1/5],[1/5]])
-K_p = 1.0 #2.0
-K_d = 0.5#1.5
-#A = np.array([[-0.3,1.0],[-1.0,1.5]])
+K_p = 1.0 
+K_d = 0.5
 A = np.array([[0,1],[-K_p,-0.5 - K_d]])
-#B = np.array([2.4,1.7])
 B = np.array([[0],[1.0]])
-#C = np.array([[-0.2,-0.5]])
 C = np.array([[-K_p,-K_d]])
 D = np.array([K_p])
 
@@ -25,32 +22,35 @@ c2d = sg.cont2discrete((A,B,C,D),dt = Ts)
 A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
 
 sys = np.array([A_d,B_d,C_d,D_d])
+#CPI用パラメータ部終了
 
-def mkgene(n):
-    return np.random.randint(0, 2, n, dtype = np.uint8)
+def simulate(r_series):
+    Num = len(r_series)
+    #GA用パラメータ部
+    K_p = 1.0
+    K_d = 0.5
+    A = np.array([[0,1],[-K_p,-0.5 - K_d]])
+    B = np.array([[0],[1.0]])
+    C = np.array([[-K_p,-K_d]])
+    D = np.array([K_p])
+    
+    Ts = 0.05
+    c2d = sg.cont2discrete((A,B,C,D),dt = Ts)
+    A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
+    #GA用パラメータ部終了
 
-def mutate_one_index(gene):
-    #geneは1次元array
-    gene = gene.copy()
-    idx = np.random.randint(0,len(gene))
-    gene[idx] = 1 - gene[idx]
-    return gene
+    #保存用ログ確保
+    x_series = np.zeros((Num, 2), dtype = np.float64)
+    u_series = np.zeros((Num, 1), dtype = np.float64)
 
-def crossover(gene1, gene2):
-    a = gene1.copy()
-    idx = np.random.randint(1, len(gene1))
-    cross_gene1 = np.hstack((a[:idx], gene2[idx:]))
-    cross_gene2 = np.hstack((gene2[:idx], a[idx:]))
-    return cross_gene1, cross_gene2
+    for i in range(Num-1):
+        x = A_d @ x_series[i] + B_d * r_series[i]
+        u = C_d @ x_series[i] + D_d * r_series[i] 
+        
+        x_series[i+1] = x
+        u_series[i+1] = u
 
-def test_crossover():
-    n = 10
-    g1 = np.zeros(n,dtype = np.uint8)
-    g2 = np.ones(n,dtype = np.uint8)
-    h1, h2 = crossover(g1,g2)
-    print(h1)
-    print(h2)
-    return 0
+    return x_series, u_series
 
 def mkreference_series(gene):
     r_series = np.array(np.packbits(gene), dtype = np.float64) * 4.0 / 255.0 - 2.0
@@ -65,44 +65,10 @@ def long_mkreference_series(gene):
             lis.append(r)
     return np.hstack([np.array(lis),np.ones( n * len(r_series))*1.5])
 
-def simulate(r_series):
-    
-    Num = len(r_series)   
-    Ts = 0.05
-    K_p = 1.0
-    K_d = 0.5
-    #保存用ログ確保
-    x_series = np.zeros((Num, 2), dtype = np.float64)
-    u_series = np.zeros((Num, 1), dtype = np.float64)
-    
-    A_c = np.array([[0,1],[-K_p,-0.5 - K_d]])
-    B_c = np.array([[0],[1.0]])
-    C_c = np.array([[-K_p,-K_d]])
-    D_c = np.array([K_p])
-
-    c2d = sg.cont2discrete((A_c,B_c,C_c,D_c),dt = Ts)
-    A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
-    #sys = np.array([A_d,B_d,C_d,D_d])
-
-    for i in range(Num-1):
-        x = A_d @ x_series[i] + B_d * r_series[i]
-        u = C_d @ x_series[i] + D_d * r_series[i] 
-        
-        x_series[i+1] = x
-        u_series[i+1] = u
-
-    return x_series, u_series
-
-#def barrier(x_series):
-    #x_series = x_series.copy()
-    #for x in x_series:
-    #return 0
-
 def evaluate_gene(gene):
     r_series = long_mkreference_series(gene)
     x_series, u_series = simulate(r_series)
     msae = np.abs(1.5 - x_series[:,0]).mean() + np.abs(1.5 - r_series).mean()
-    #msae = np.abs(np.pi/2 - x_series[:,0]).mean() + np.abs(np.pi/2 - r_series).mean() #+ np.abs(r_series[1:] - r_series[:-1]).mean() #now
     return 1 / msae
 
 def plot_result(gene):
@@ -142,6 +108,7 @@ def plot_CPI(CPI_set,gene):
     for i in CPI_set:
         x2 = (1.0 - i[0] * (x1-1.5))/i[1]
         plt.plot(x1,x2,color = "k")
+
     #gene部分
     r_series = long_mkreference_series(gene)
     x_series, u_series = simulate(r_series)

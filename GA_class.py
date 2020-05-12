@@ -44,6 +44,9 @@ class GA:
         return r_series
 
     def long_mkreference_series(self,gene):
+        #nはmkreference_seriesの長さを時間方向にn倍する
+        #また返り値ではnp.hstackを使って引き伸ばされたmkreference_seriesと
+        #定常値(今回は1.5)を結合したものを用いる
         n = 5
         r_series = self.mkreference_series(gene)
         lis = []
@@ -56,22 +59,24 @@ class GA:
         #実際の状態方程式におけるシミュレーション
         #印加される目標値に対して状態と入力を出力
         Num = len(r_series)
-        #パラメータ
-        Ts = 0.05
+
+        #パラメータ部開始
         K_p = 1.0
         K_d = 0.5
-
         x_series = np.zeros((Num, 2), dtype = np.float64)
         u_series = np.zeros((Num, 1), dtype = np.float64)
     
-        A_c = np.array([[0,1],[-K_p,-0.5 - K_d]])
-        B_c = np.array([[0],[1.0]])
-        C_c = np.array([[-K_p,-K_d]])
-        D_c = np.array([K_p])
-
-        c2d = sg.cont2discrete((A_c,B_c,C_c,D_c),dt = Ts)
+        A = np.array([[0,1],[-K_p,-0.5 - K_d]])
+        B = np.array([[0],[1.0]])
+        C = np.array([[-K_p,-K_d]])
+        D = np.array([K_p])
+        
+        Ts = 0.05
+        c2d = sg.cont2discrete((A,B,C,D),dt = Ts)
         A_d,B_d,C_d,D_d = c2d[0],c2d[1].reshape(2),c2d[2],c2d[3]
-
+        #パラメータ部終了
+        
+        #更新式
         for i in range(Num-1):
             x = A_d @ x_series[i] + B_d * r_series[i]
             u = C_d @ x_series[i] + D_d * r_series[i] 
