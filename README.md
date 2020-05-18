@@ -6,6 +6,7 @@
 - Ubuntu 18.04 LTS
 - python 3.6.9
 - numpy 1.13.3
+- scipy 0.19.1
 - matplotlib 2.1.1
 - PuLP 1.6.0
 
